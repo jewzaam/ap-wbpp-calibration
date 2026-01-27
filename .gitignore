@@ -258,3 +258,6 @@ $RECYCLE.BIN/
 *.fit
 wbpp-decoded.json
 *.xpsm
+
+# claude
+.claude/

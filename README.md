@@ -26,57 +26,99 @@ This automation tool:
     └── flats/    (flat frames, can be grouped by filter)
   ```
 
+## Installation
+
+Install using pip:
+
+```bash
+pip install git+https://github.com/jewzaam/ap-wbpp-calibration.git
+```
+
+Or install in development mode:
+
+```bash
+git clone https://github.com/jewzaam/ap-wbpp-calibration.git
+cd ap-wbpp-calibration
+pip install -e .
+```
+
 ## Quick Start
 
-### 1. Prepare Process Icons
+### 1. Organize Your Frames
 
-In PixInsight:
-1. Configure ImageIntegration with your preferred settings for bias frames
-2. Save as a process icon (drag to workspace or save as .psm file)
-3. Repeat for dark frames
-4. Repeat for flat frames (optional - script will use defaults if not provided)
+Place all calibration frames in a single directory. The tool will automatically discover and group them by the `TYPE` FITS keyword:
+- `TYPE=bias` - Bias frames
+- `TYPE=dark` - Dark frames
+- `TYPE=flat` - Flat frames
+- `TYPE=light` - Light frames (automatically ignored)
 
-### 2. Organize Your Frames
+No subdirectory structure is required.
 
-Ensure your calibration frames are in subdirectories:
-- `bias/` - bias frames
-- `darks/` - dark frames  
-- `flats/` - flat frames (will be automatically grouped by filter)
+### 2. Run the Automation
 
-### 3. Run the Automation
-
-**Windows:**
-```batch
-calibrate-masters.bat <input_dir> <output_dir> <bias_icon> <dark_icon> [flat_icon]
-```
-
-**Linux/Mac:**
+**Basic usage (generate and execute):**
 ```bash
-./calibrate-masters.sh <input_dir> <output_dir> <bias_icon> <dark_icon> [flat_icon]
+ap-wbpp-calibration \
+    <input_dir> \
+    <output_dir> \
+    --pixinsight-binary "C:\Program Files\PixInsight\bin\PixInsight.exe"
 ```
 
-**Example:**
-```batch
-calibrate-masters.bat "D:\AstroData\M31\frames" "D:\AstroData\M31\masters" "bias_integration.psm" "dark_integration.psm" "flat_integration.psm"
+**Generate scripts only (without executing):**
+```bash
+ap-wbpp-calibration <input_dir> <output_dir> --script-only
 ```
 
-## Configuration
-
-### Batch Script Configuration
-
-Edit `calibrate-masters.bat` (Windows) or `calibrate-masters.sh` (Linux/Mac) and set:
-
-```batch
-set PIXINSIGHT_EXE="C:\Program Files\PixInsight\bin\PixInsight.exe"
+**With bias/dark master libraries (for flat calibration):**
+```bash
+ap-wbpp-calibration \
+    <input_dir> \
+    <output_dir> \
+    --bias-master-dir "D:\Masters\Bias" \
+    --dark-master-dir "D:\Masters\Darks" \
+    --pixinsight-binary "C:\Program Files\PixInsight\bin\PixInsight.exe"
 ```
 
-Adjust the path to match your PixInsight installation.
+**Example (Windows):**
+```bash
+ap-wbpp-calibration \
+    "D:\AstroData\2026-01-27\calibration" \
+    "D:\AstroData\2026-01-27\masters" \
+    --pixinsight-binary "C:\Program Files\PixInsight\bin\PixInsight.exe"
+```
 
-### Process Icon Paths
+**Example (Linux/Mac):**
+```bash
+ap-wbpp-calibration \
+    ~/AstroData/2026-01-27/calibration \
+    ~/AstroData/2026-01-27/masters \
+    --pixinsight-binary /opt/PixInsight/bin/PixInsight
+```
 
-Process icons can be specified as:
-- Full path to a `.psm` file: `"C:\Path\To\bias.psm"`
-- Process icon identifier from workspace: `"BiasIntegration"`
+## Command Line Options
+
+```
+ap-wbpp-calibration [-h] [--bias-master-dir BIAS_MASTER_DIR]
+                    [--dark-master-dir DARK_MASTER_DIR]
+                    [--script-dir SCRIPT_DIR]
+                    [--pixinsight-binary PIXINSIGHT_BINARY]
+                    [--instance-id INSTANCE_ID]
+                    [--script-only]
+                    input_dir output_dir
+
+positional arguments:
+  input_dir             Input directory containing calibration frames
+  output_dir            Output directory for master calibration frames
+
+optional arguments:
+  -h, --help            Show help message and exit
+  --bias-master-dir     Directory containing bias master library (for flat calibration)
+  --dark-master-dir     Directory containing dark master library (for flat calibration)
+  --script-dir          Directory for generated PixInsight scripts (default: output_dir/scripts)
+  --pixinsight-binary   Path to PixInsight binary (required unless --script-only)
+  --instance-id         PixInsight instance ID (default: 123)
+  --script-only         Generate scripts only, do not execute PixInsight
+```
 
 ## How It Works
 
@@ -101,17 +143,27 @@ output_directory/
   └── ...
 ```
 
-## Flat Frame Filter Detection
+## Frame Grouping
 
-The script automatically groups flat frames by reading the `FILTER` FITS keyword. If frames don't have a filter keyword, they're grouped as "NoFilter".
+Frames are automatically grouped by FITS keywords to ensure only compatible frames are combined:
 
-To customize the filter keyword, edit `calibrate-masters.js`:
-```javascript
-wbppFlats: {
-    optimizeDarks: true,
-    filterKeyword: "FILTER"  // Change this to your FITS keyword
-}
-```
+**Bias frames** grouped by:
+- Camera (INSTRUME)
+- Set Temperature (SET-TEMP)
+- Gain
+- Offset
+- Readout Mode (READOUTM)
+
+**Dark frames** grouped by:
+- All bias grouping criteria above
+- Exposure time
+
+**Flat frames** grouped by:
+- All bias grouping criteria above
+- Observation date (DATE)
+- Filter
+
+See `ap_wbpp_calibration/config.py` for the complete configuration.
 
 ## Optimize Darks for Flats
 
@@ -121,31 +173,43 @@ This is equivalent to manually checking "Optimize" in WBPP's flat calibration se
 
 ## Troubleshooting
 
-### "Process icon not found"
-- Verify the process icon path is correct
-- Ensure the .psm file exists or the workspace icon identifier is correct
-- Use full absolute paths
-
 ### "No frames found"
-- Check that subdirectories are named correctly: `bias/`, `darks/`, `flats/`
-- Verify files have `.fit`, `.fits`, or `.FIT` extensions
-- Check that the input directory path is correct
+- Verify files have `.fit` or `.fits` extensions
+- Check that files have the `TYPE` FITS keyword set correctly
+- Ensure the input directory path is correct
 
 ### "PixInsight not found"
-- Edit the batch script and set `PIXINSIGHT_EXE` to your installation path
-- On Windows, default is: `C:\Program Files\PixInsight\bin\PixInsight.exe`
-- On Linux/Mac, default is: `/opt/PixInsight/bin/PixInsight`
+- Verify the `--pixinsight-binary` path is correct
+- On Windows: `C:\Program Files\PixInsight\bin\PixInsight.exe`
+- On Linux/Mac: `/opt/PixInsight/bin/PixInsight` or `/Applications/PixInsight/bin/PixInsight`
+- Use quotes around paths with spaces
 
-### Process icon execution fails
-- The script will fall back to default ImageIntegration settings
-- For best results, ensure your process icons are properly saved and accessible
+### "No matching master found for flat calibration"
+- Ensure bias/dark masters have matching instrument settings (camera, temperature, gain, offset, readout mode)
+- Masters are matched only by instrument settings, not by date or filter
+- Use `--bias-master-dir` and `--dark-master-dir` to specify master library locations
 
-## Files
+### PixInsight execution fails
+- Check the generated script at `<output_dir>/scripts/calibrate_masters.js`
+- Verify PixInsight can open the script manually
+- Check PixInsight's console output for error messages
 
-- `calibrate-masters.js` - Main PixInsight script
-- `calibrate-masters.bat` - Windows batch wrapper
-- `calibrate-masters.sh` - Linux/Mac shell wrapper
-- `README.md` - This file
+## Project Structure
+
+```
+ap-wbpp-calibration/
+├── ap_wbpp_calibration/
+│   ├── calibrate_masters.py    # Main CLI entry point
+│   ├── config.py                # Grouping configuration
+│   ├── grouping.py              # Frame grouping logic
+│   ├── master_matching.py       # Master library matching
+│   ├── script_generator.py      # JavaScript code generation
+│   └── templates/               # Jinja2 templates for PixInsight scripts
+├── tests/                       # Unit tests
+├── examples/                    # Example PixInsight scripts
+├── README.md
+├── CRITICAL_INFO.md            # Implementation details
+└── pyproject.toml
 
 ## Notes
 

@@ -5,6 +5,7 @@ Main entry point for calibration master generation.
 """
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -169,6 +170,48 @@ def generate_masters(
     return []
 
 
+def run_pixinsight(
+    pixinsight_binary: str, script_path: str, instance_id: int = 123
+) -> int:
+    """
+    Execute PixInsight with the generated script.
+
+    Args:
+        pixinsight_binary: Path to PixInsight binary/executable
+        script_path: Path to the JavaScript script to execute
+        instance_id: PixInsight instance ID (default: 123)
+
+    Returns:
+        Exit code from PixInsight process
+    """
+    script_path = Path(script_path).resolve()
+    pixinsight_binary = Path(pixinsight_binary).resolve()
+
+    if not pixinsight_binary.exists():
+        raise FileNotFoundError(f"PixInsight binary not found: {pixinsight_binary}")
+
+    if not script_path.exists():
+        raise FileNotFoundError(f"Script not found: {script_path}")
+
+    print(f"\nExecuting PixInsight...")
+    print(f"  Binary: {pixinsight_binary}")
+    print(f"  Script: {script_path}")
+    print(f"  Instance ID: {instance_id}")
+
+    # Build command: PixInsight -n <instance_id> <script_path>
+    cmd = [str(pixinsight_binary), "-n", str(instance_id), "--run", str(script_path)]
+
+    print(f"\nRunning: {' '.join(cmd)}\n")
+
+    # Execute and wait for completion
+    try:
+        result = subprocess.run(cmd, check=False)
+        return result.returncode
+    except Exception as e:
+        print(f"ERROR: Failed to execute PixInsight: {e}", file=sys.stderr)
+        raise
+
+
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -194,6 +237,21 @@ def main() -> int:
         "--script-dir",
         help="Directory for generated PixInsight scripts (default: output_dir/scripts)",
     )
+    parser.add_argument(
+        "--pixinsight-binary",
+        help="Path to PixInsight binary (required for execution)",
+    )
+    parser.add_argument(
+        "--instance-id",
+        type=int,
+        default=123,
+        help="PixInsight instance ID (default: 123)",
+    )
+    parser.add_argument(
+        "--script-only",
+        action="store_true",
+        help="Generate scripts only, do not execute PixInsight",
+    )
 
     args = parser.parse_args()
 
@@ -209,8 +267,31 @@ def main() -> int:
         if scripts:
             print(f"\nGenerated combined script: {Path(scripts[0]).name}")
             print(f"Script location: {Path(scripts[0]).parent}")
-            print("\nNext step: Execute script in PixInsight")
-            # TODO: Implement PixInsight execution
+
+            # Execute PixInsight if requested
+            if not args.script_only:
+                if not args.pixinsight_binary:
+                    print("\nERROR: --pixinsight-binary is required to execute PixInsight")
+                    print("Use --script-only to generate scripts without executing")
+                    return 1
+
+                exit_code = run_pixinsight(
+                    args.pixinsight_binary, scripts[0], args.instance_id
+                )
+
+                if exit_code == 0:
+                    print("\nPixInsight execution completed successfully!")
+                else:
+                    print(
+                        f"\nWARNING: PixInsight exited with code {exit_code}",
+                        file=sys.stderr,
+                    )
+                    return exit_code
+            else:
+                print("\nScript-only mode: PixInsight execution skipped")
+                print(
+                    f"To execute: {args.pixinsight_binary or '<pixinsight-binary>'} -n {args.instance_id} {scripts[0]}"
+                )
         else:
             print("\nNo calibration frames found to process.")
 
