@@ -36,32 +36,32 @@ def _get_template_env() -> Environment:
 def generate_master_filename(metadata: Dict[str, str], frame_type: str) -> str:
     """
     Generate master filename based on metadata.
-    
+
     Uses required keywords from config, excluding TYPE.
     First part is frame type capitalized + "master" lowercase.
-    
+
     Args:
         metadata: Dictionary of keyword values
         frame_type: "bias", "dark", or "flat"
-        
+
     Returns:
         Filename string (without extension)
     """
     if frame_type not in config.REQUIRED_KEYWORDS:
         raise ValueError(f"Unknown frame type: {frame_type}")
-    
+
     # First part: frame type capitalized + "master" lowercase
     frame_type_cap = frame_type.capitalize()
     parts = [f"master{frame_type_cap}"]
-    
+
     # Add parts from required keywords (excluding TYPE)
     required = config.REQUIRED_KEYWORDS[frame_type]
     for keyword in required:
         if keyword == config.KEYWORD_TYPE:
             continue  # Skip TYPE keyword
-        
+
         value = metadata.get(keyword, "UNKNOWN")
-        
+
         # Denormalize keyword name back to FITS form for filename
         # ap-common can convert normalized keywords back to original FITS names
         denormalized = ap_common.denormalize_header(keyword)
@@ -71,7 +71,7 @@ def generate_master_filename(metadata: Dict[str, str], frame_type: str) -> str:
             # Fallback: uppercase the normalized keyword
             keyword_safe = keyword.upper()
         parts.append(f"{keyword_safe}_{value}")
-    
+
     # Sanitize filename parts (replace invalid chars)
     sanitized = []
     for part in parts:
@@ -80,7 +80,7 @@ def generate_master_filename(metadata: Dict[str, str], frame_type: str) -> str:
         part = part.replace("/", "-")
         part = part.replace("\\", "-")
         sanitized.append(part)
-    
+
     return "_".join(sanitized)
 
 
@@ -92,65 +92,73 @@ def generate_combined_script(
 ) -> str:
     """
     Generate a single combined script that processes all groups sequentially.
-    
+
     Args:
         output_dir: Output directory for master files
         bias_groups: List of (metadata, file_paths) tuples for bias groups
         dark_groups: List of (metadata, file_paths) tuples for dark groups
         flat_groups: List of (metadata, file_paths, master_bias_xisf, master_dark_xisf) tuples for flat groups
-        
+
     Returns:
         Combined JavaScript code as string
     """
     env = _get_template_env()
     template = env.get_template("combined.j2")
-    
+
     output_path = Path(output_dir)
-    
+
     # Prepare template context for bias groups
     bias_contexts = []
     for metadata, file_paths in bias_groups:
         master_name = generate_master_filename(metadata, "bias")
         output_file = output_path / f"{master_name}.xisf"
-        bias_contexts.append({
-            "file_paths": [escape_js_string(p) for p in file_paths],
-            "master_name": master_name,
-            "output_path": escape_js_string(str(output_file)),
-        })
-    
+        bias_contexts.append(
+            {
+                "file_paths": [escape_js_string(p) for p in file_paths],
+                "master_name": master_name,
+                "output_path": escape_js_string(str(output_file)),
+            }
+        )
+
     # Prepare template context for dark groups
     dark_contexts = []
     for metadata, file_paths in dark_groups:
         master_name = generate_master_filename(metadata, "dark")
         output_file = output_path / f"{master_name}.xisf"
-        dark_contexts.append({
-            "file_paths": [escape_js_string(p) for p in file_paths],
-            "master_name": master_name,
-            "output_path": escape_js_string(str(output_file)),
-        })
-    
+        dark_contexts.append(
+            {
+                "file_paths": [escape_js_string(p) for p in file_paths],
+                "master_name": master_name,
+                "output_path": escape_js_string(str(output_file)),
+            }
+        )
+
     # Prepare template context for flat groups
     flat_contexts = []
     for metadata, file_paths, master_bias_xisf, master_dark_xisf in flat_groups:
         master_name = generate_master_filename(metadata, "flat")
         calibrated_dir = output_path / "calibrated" / master_name
         master_output_path = output_path / f"{master_name}.xisf"
-        
-        flat_contexts.append({
-            "file_paths": [escape_js_string(p) for p in file_paths],
-            "master_name": master_name,
-            "calibrated_dir": escape_js_string(str(calibrated_dir)),
-            "output_path": escape_js_string(str(master_output_path)),
-            "master_bias_path": escape_js_string(master_bias_xisf) if master_bias_xisf else "",
-            "master_dark_path": escape_js_string(master_dark_xisf) if master_dark_xisf else "",
-            "master_bias_enabled": master_bias_xisf is not None,
-            "master_dark_enabled": master_dark_xisf is not None,
-        })
-    
+
+        flat_contexts.append(
+            {
+                "file_paths": [escape_js_string(p) for p in file_paths],
+                "master_name": master_name,
+                "calibrated_dir": escape_js_string(str(calibrated_dir)),
+                "output_path": escape_js_string(str(master_output_path)),
+                "master_bias_path": (
+                    escape_js_string(master_bias_xisf) if master_bias_xisf else ""
+                ),
+                "master_dark_path": (
+                    escape_js_string(master_dark_xisf) if master_dark_xisf else ""
+                ),
+                "master_bias_enabled": master_bias_xisf is not None,
+                "master_dark_enabled": master_dark_xisf is not None,
+            }
+        )
+
     return template.render(
         bias_groups=bias_contexts,
         dark_groups=dark_contexts,
         flat_groups=flat_contexts,
     )
-
-

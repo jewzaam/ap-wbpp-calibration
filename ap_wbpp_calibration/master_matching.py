@@ -12,46 +12,49 @@ from . import config
 
 
 def find_matching_master_for_flat(
-    master_dir: str, flat_headers: Dict, master_type: str, flat_exposure_times: Optional[List[float]] = None
+    master_dir: str,
+    flat_headers: Dict,
+    master_type: str,
+    flat_exposure_times: Optional[List[float]] = None,
 ) -> Optional[str]:
     """
     Find a matching master file for flat calibration.
-    
+
     For bias: Matches on instrument settings only (MASTER_MATCH_KEYWORDS).
     For dark: Matches on instrument settings, then selects dark with exposure time
     closest to (but preferably less than) the flat's exposure time.
-    
+
     Args:
         master_dir: Directory containing master files
         flat_headers: FITS headers from a flat frame (or representative flat from group)
         master_type: "bias" or "dark"
         flat_exposure_times: List of exposure times for all flats in the group (for dark matching)
                              If None, uses EXPOSURE/EXPTIME from flat_headers
-        
+
     Returns:
         Path to matching master file, or None if not found
     """
     master_path = Path(master_dir)
     if not master_path.exists():
         return None
-    
+
     # Build filters dict: TYPE and all instrument settings
     # TYPE in master files is "MASTER BIAS" or "MASTER DARK" (uppercase, two words)
     filters = {
         config.KEYWORD_TYPE: f"MASTER {master_type.upper()}",
     }
-    
+
     # Add instrument setting filters from flat headers
     for keyword in config.MASTER_MATCH_KEYWORDS:
         value = flat_headers.get(keyword)
         if value is not None:
             filters[keyword] = str(value).strip()
-    
+
     # Build required_properties list (TYPE + instrument settings + EXPOSURESECONDS for darks)
     required_properties = [config.KEYWORD_TYPE] + list(config.MASTER_MATCH_KEYWORDS)
     if master_type == "dark":
         required_properties.append(config.KEYWORD_EXPOSURESECONDS)
-    
+
     # Get filtered metadata using ap-common
     try:
         matching_masters = ap_common.get_filtered_metadata(
@@ -67,18 +70,20 @@ def find_matching_master_for_flat(
     except Exception:
         # If ap-common can't process the directory, we're done
         return None
-    
+
     if not matching_masters:
         return None
-    
+
     # For bias, return first match (all should be equivalent)
     if master_type == "bias":
         return next(iter(matching_masters.keys()))
-    
+
     # For dark, need to match exposure time
     if master_type == "dark":
-        return _find_best_dark_match(matching_masters, flat_headers, flat_exposure_times)
-    
+        return _find_best_dark_match(
+            matching_masters, flat_headers, flat_exposure_times
+        )
+
     return None
 
 
@@ -89,15 +94,15 @@ def _find_best_dark_match(
 ) -> Optional[str]:
     """
     Find the best matching dark master based on exposure time.
-    
+
     Prefers darks with exposure time less than or equal to the flat's exposure time.
     If no such dark exists, uses the closest dark with higher exposure time.
-    
+
     Args:
         matching_masters: Dict mapping filename to metadata dict
         flat_headers: FITS headers from flat frame
         flat_exposure_times: List of exposure times for all flats in group (optional)
-        
+
     Returns:
         Path to best matching dark master, or None if no valid exposure time found
     """
@@ -116,7 +121,7 @@ def _find_best_dark_match(
         except (ValueError, TypeError):
             # Can't parse exposure time, return first match
             return next(iter(matching_masters.keys()))
-    
+
     # Extract exposure times from masters
     dark_candidates = []
     for filename, metadata in matching_masters.items():
@@ -125,26 +130,30 @@ def _find_best_dark_match(
             continue
         try:
             exposure_float = float(exposure)
-            dark_candidates.append({
-                "path": filename,
-                "exposure": exposure_float,
-            })
+            dark_candidates.append(
+                {
+                    "path": filename,
+                    "exposure": exposure_float,
+                }
+            )
         except (ValueError, TypeError):
             continue
-    
+
     if not dark_candidates:
         # No valid exposure times, return first match
         return next(iter(matching_masters.keys()))
-    
+
     # Prefer darks with exposure <= target (scaling up is better)
     # If none exist, use the closest dark with higher exposure
     suitable_darks = [d for d in dark_candidates if d["exposure"] <= target_exposure]
-    
+
     if suitable_darks:
         # Find the one closest to target (prefer higher values, but still <= target)
         best_dark = max(suitable_darks, key=lambda d: d["exposure"])
         return best_dark["path"]
     else:
         # No dark with exposure <= target, use closest higher exposure
-        best_dark = min(dark_candidates, key=lambda d: abs(d["exposure"] - target_exposure))
+        best_dark = min(
+            dark_candidates, key=lambda d: abs(d["exposure"] - target_exposure)
+        )
         return best_dark["path"]

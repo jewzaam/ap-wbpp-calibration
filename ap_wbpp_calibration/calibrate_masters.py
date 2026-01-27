@@ -26,29 +26,29 @@ def generate_masters(
 ) -> List[str]:
     """
     Generate calibration masters from input directory.
-    
+
     Args:
         input_dir: Directory containing calibration frames
         output_dir: Directory for output master files
         bias_master_dir: Directory containing bias masters (for flat calibration)
         dark_master_dir: Directory containing dark masters (for flat calibration)
         script_output_dir: Directory for generated JS scripts (default: output_dir/scripts)
-        
+
     Returns:
         List of generated script file paths
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    
+
     if script_output_dir:
         script_dir = Path(script_output_dir)
     else:
         script_dir = output_path / "scripts"
     script_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Discover files using ap-common get_filtered_metadata
     print(f"Discovering calibration files in: {input_dir}")
-    
+
     # Get files for each type using get_filtered_metadata
     files_by_type = {}
     for frame_type in ["bias", "dark", "flat"]:
@@ -71,53 +71,53 @@ def generate_masters(
         except Exception as e:
             print(f"Warning: Failed to discover {frame_type} files: {e}")
             files_by_type[frame_type] = []
-    
-    print(f"Found files:")
+
+    print("Found files:")
     print(f"  Bias: {len(files_by_type['bias'])}")
     print(f"  Dark: {len(files_by_type['dark'])}")
     print(f"  Flat: {len(files_by_type['flat'])}")
-    
+
     # Collect all groups for combined script
     bias_groups_list = []
     dark_groups_list = []
     flat_groups_list = []
-    
+
     # Process bias frames
     if files_by_type["bias"]:
         print("\nProcessing bias frames...")
         bias_groups = group_files(files_by_type["bias"], "bias")
-        
+
         for group_key, group_files_list in bias_groups.items():
             metadata = get_group_metadata(group_files_list[0]["headers"], "bias")
             file_paths = [f["path"] for f in group_files_list]
             bias_groups_list.append((metadata, file_paths))
             print(f"  Group: {len(file_paths)} files")
-    
+
     # Process dark frames
     if files_by_type["dark"]:
         print("\nProcessing dark frames...")
         dark_groups = group_files(files_by_type["dark"], "dark")
-        
+
         for group_key, group_files_list in dark_groups.items():
             metadata = get_group_metadata(group_files_list[0]["headers"], "dark")
             file_paths = [f["path"] for f in group_files_list]
             dark_groups_list.append((metadata, file_paths))
             print(f"  Group: {len(file_paths)} files")
-    
+
     # Process flat frames
     if files_by_type["flat"]:
         print("\nProcessing flat frames...")
         flat_groups = group_files(files_by_type["flat"], "flat")
-        
+
         for group_key, group_files_list in flat_groups.items():
             first_file = group_files_list[0]
             metadata = get_group_metadata(first_file["headers"], "flat")
             file_paths = [f["path"] for f in group_files_list]
-            
+
             # Find matching masters
             master_bias_xisf = None
             master_dark_xisf = None
-            
+
             # Extract exposure times from all flats in group for dark matching
             flat_exposure_times = []
             for file_info in group_files_list:
@@ -128,12 +128,12 @@ def generate_masters(
                         flat_exposure_times.append(float(exposure))
                     except (ValueError, TypeError):
                         pass
-            
+
             if bias_master_dir:
                 master_bias_xisf = find_matching_master_for_flat(
                     bias_master_dir, first_file["headers"], "bias"
                 )
-            
+
             if dark_master_dir:
                 master_dark_xisf = find_matching_master_for_flat(
                     dark_master_dir,
@@ -141,14 +141,16 @@ def generate_masters(
                     "dark",
                     flat_exposure_times if flat_exposure_times else None,
                 )
-            
-            flat_groups_list.append((metadata, file_paths, master_bias_xisf, master_dark_xisf))
+
+            flat_groups_list.append(
+                (metadata, file_paths, master_bias_xisf, master_dark_xisf)
+            )
             print(f"  Group: {len(file_paths)} files")
             if master_bias_xisf:
                 print(f"    Using bias master: {Path(master_bias_xisf).name}")
             if master_dark_xisf:
                 print(f"    Using dark master: {Path(master_dark_xisf).name}")
-    
+
     # Generate single combined script
     if bias_groups_list or dark_groups_list or flat_groups_list:
         print("\nGenerating combined script...")
@@ -158,12 +160,12 @@ def generate_masters(
             dark_groups_list,
             flat_groups_list,
         )
-        
+
         script_path = script_dir / "calibrate_masters.js"
         script_path.write_text(combined_script, encoding="utf-8")
         print(f"  Generated: {script_path.name}")
         return [str(script_path)]
-    
+
     return []
 
 
@@ -192,9 +194,9 @@ def main() -> int:
         "--script-dir",
         help="Directory for generated PixInsight scripts (default: output_dir/scripts)",
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         scripts = generate_masters(
             args.input_dir,
@@ -203,7 +205,7 @@ def main() -> int:
             args.dark_master_dir,
             args.script_dir,
         )
-        
+
         if scripts:
             print(f"\nGenerated combined script: {Path(scripts[0]).name}")
             print(f"Script location: {Path(scripts[0]).parent}")
@@ -211,11 +213,12 @@ def main() -> int:
             # TODO: Implement PixInsight execution
         else:
             print("\nNo calibration frames found to process.")
-        
+
         return 0
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1
 

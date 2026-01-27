@@ -12,80 +12,80 @@ from . import config
 def create_group_key(headers: Dict, frame_type: str) -> Tuple:
     """
     Create a grouping key tuple from headers for the given frame type.
-    
+
     Args:
         headers: FITS headers dict
         frame_type: Frame type ("bias", "dark", or "flat")
-        
+
     Returns:
         Tuple of header values in the order specified by REQUIRED_KEYWORDS
     """
     if frame_type not in config.REQUIRED_KEYWORDS:
         raise ValueError(f"Unknown frame type: {frame_type}")
-    
+
     required = config.REQUIRED_KEYWORDS[frame_type]
     key_values = []
-    
+
     for keyword in required:
         # ap-common normalizes headers, so use normalized keyword names
         # EXPOSURE/EXPTIME -> exposureseconds, SET-TEMP -> settemp, etc.
         value = headers.get(keyword)
-        
+
         # Normalize to string and strip whitespace
         if value is None:
             value = ""
         else:
             value = str(value).strip()
         key_values.append(value)
-    
+
     return tuple(key_values)
 
 
 def group_files(files: List[Dict], frame_type: str) -> Dict[Tuple, List[Dict]]:
     """
     Group files by required keywords.
-    
+
     Args:
         files: List of file info dicts with "path" and "headers" keys
         frame_type: Frame type ("bias", "dark", or "flat")
-        
+
     Returns:
         Dictionary mapping group keys (tuples) to lists of file info dicts
     """
     groups: Dict[str, List[Dict]] = {}
-    
+
     for file_info in files:
         headers = file_info["headers"]
         group_key = create_group_key(headers, frame_type)
-        
+
         if group_key not in groups:
             groups[group_key] = []
-        
+
         groups[group_key].append(file_info)
-    
+
     return groups
 
 
 def get_group_metadata(headers: Dict, frame_type: str) -> Dict[str, str]:
     """
     Extract metadata dict for required keywords from headers.
-    
+
     Args:
         headers: FITS headers dict from a file (already normalized by ap-common)
         frame_type: Frame type
-        
+
     Returns:
         Dictionary mapping required keyword names to values
     """
     if frame_type not in config.REQUIRED_KEYWORDS:
         raise ValueError(f"Unknown frame type: {frame_type}")
-    
+
     required = config.REQUIRED_KEYWORDS[frame_type]
     metadata = {}
-    
+
     for keyword in required:
         value = headers.get(keyword)
         if value is not None:
             metadata[keyword] = str(value).strip()
-    
+
     return metadata
