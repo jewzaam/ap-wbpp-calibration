@@ -83,14 +83,53 @@ P.maxBufferThreads = 0;
 
 console.show();
 console.writeln("Generating dark master: {{ group.master_name }}");
+console.writeln("Number of images to integrate: " + P.images.length);
+for (var i = 0; i < P.images.length; i++) {
+    console.writeln("  [" + i + "] " + P.images[i][1]);
+}
 console.flush();
 
 P.executeGlobal();
 
-// Save the integrated image
+// Save the integrated image using FileFormat API (avoids interactive prompts)
 var integratedWindow = ImageWindow.windowById(P.integrationImageId);
 if (integratedWindow && !integratedWindow.isNull) {
-    integratedWindow.saveAs("{{ group.output_path }}");
+    var outputPath = "{{ group.output_path }}";
+    var outputHints = "properties fits-keywords no-compress-data block-alignment 4096 max-inline-block-size 3072 no-embedded-data no-resolution";
+
+    var F = new FileFormat(".xisf", false, true);
+    if (F.isNull) {
+        throw new Error("No installed file format can write .xisf files");
+    }
+
+    var f = new FileFormatInstance(F);
+    if (f.isNull) {
+        throw new Error("Unable to instantiate file format: " + F.name);
+    }
+
+    if (!f.create(outputPath, outputHints)) {
+        throw new Error("Error creating output file: " + outputPath);
+    }
+
+    var d = new ImageDescription;
+    d.bitsPerSample = 32;
+    d.ieeefpSampleFormat = true;
+    d.imageType = integratedWindow.imageType;
+
+    if (!f.setOptions(d)) {
+        throw new Error("Unable to set output file options");
+    }
+
+    f.keywords = integratedWindow.keywords;
+    integratedWindow.mainView.exportProperties(f);
+
+    if (!f.writeImage(integratedWindow.mainView.image)) {
+        throw new Error("Error writing output file: " + outputPath);
+    }
+
+    f.close();
+    integratedWindow.forceClose();
+
     console.writeln("Saved master to: {{ group.output_path }}");
 } else {
     console.writeln("ERROR: Could not find integrated image");

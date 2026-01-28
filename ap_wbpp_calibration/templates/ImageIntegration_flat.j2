@@ -1,42 +1,31 @@
-// Determine which files to use: calibrated if calibration was performed, otherwise original raw files
-var useCalibrated = {{ (group.master_bias_enabled or group.master_dark_enabled)|lower }};
-var filesToIntegrate = [];
-
-if (useCalibrated) {
-    // Look for calibrated files
-    var calibratedDir = "{{ group.calibrated_dir }}";
-    var dir = new File(calibratedDir);
-    if (dir.exists && dir.isDirectory) {
-        var files = File.findFiles(calibratedDir, "*_c.xisf", File.FlagCaseInsensitive);
-        for (var i = 0; i < files.length; i++) {
-            filesToIntegrate.push(files[i]);
-        }
-    }
-    
-    if (filesToIntegrate.length === 0) {
-        console.writeln("WARNING: No calibrated flat files found in " + calibratedDir);
-        console.writeln("Falling back to original raw flat files");
-        useCalibrated = false;
-    }
-}
-
-if (!useCalibrated) {
-    // Use original raw flat files
-{% for file_path in group.file_paths %}
-    filesToIntegrate.push("{{ file_path }}");
-{% endfor %}
-}
-
-if (filesToIntegrate.length === 0) {
-    console.writeln("ERROR: No flat files found for integration");
-    throw new Error("No flat files found");
-}
-
 var P = new ImageIntegration;
-P.images = []; // enabled, path, drizzlePath, localNormalizationDataPath
-for (var i = 0; i < filesToIntegrate.length; i++) {
-    P.images.push([true, filesToIntegrate[i], "", ""]);
+{% if group.master_bias_enabled or group.master_dark_enabled %}
+// Using calibrated files from: {{ group.calibrated_dir }}
+// Note: Actual file paths will be determined at runtime by searching for *_c.xisf files
+var calibratedDir = "{{ group.calibrated_dir }}";
+var files = File.findFiles(calibratedDir, "*_c.xisf", File.FlagCaseInsensitive);
+P.images = [];
+for (var i = 0; i < files.length; i++) {
+    P.images.push([true, files[i], "", ""]);
 }
+
+if (P.images.length === 0) {
+    console.writeln("WARNING: No calibrated flat files found in " + calibratedDir);
+    console.writeln("Falling back to original raw flat files");
+    P.images = [ // enabled, path, drizzlePath, localNormalizationDataPath
+{% for file_path in group.file_paths %}
+       [true, "{{ file_path }}", "", ""]{% if not loop.last %},{% endif %}
+{% endfor %}
+    ];
+}
+{% else %}
+// Using original raw flat files (no calibration)
+P.images = [ // enabled, path, drizzlePath, localNormalizationDataPath
+{% for file_path in group.file_paths %}
+   [true, "{{ file_path }}", "", ""]{% if not loop.last %},{% endif %}
+{% endfor %}
+];
+{% endif %}
 P.inputHints = "fits-keywords normalize only-first-image raw cfa use-roworder-keywords signed-is-physical";
 P.overrideImageType = true;
 P.imageType = 3;
@@ -119,14 +108,53 @@ console.writeln("Integrating calibrated flat frames: {{ group.master_name }}");
 {% else %}
 console.writeln("Integrating raw flat frames (no calibration): {{ group.master_name }}");
 {% endif %}
+console.writeln("Number of images to integrate: " + P.images.length);
+for (var i = 0; i < P.images.length; i++) {
+    console.writeln("  [" + i + "] " + P.images[i][1]);
+}
 console.flush();
 
 P.executeGlobal();
 
-// Save the integrated image
+// Save the integrated image using FileFormat API (avoids interactive prompts)
 var integratedWindow = ImageWindow.windowById(P.integrationImageId);
 if (integratedWindow && !integratedWindow.isNull) {
-    integratedWindow.saveAs("{{ group.output_path }}");
+    var outputPath = "{{ group.output_path }}";
+    var outputHints = "properties fits-keywords no-compress-data block-alignment 4096 max-inline-block-size 3072 no-embedded-data no-resolution";
+
+    var F = new FileFormat(".xisf", false, true);
+    if (F.isNull) {
+        throw new Error("No installed file format can write .xisf files");
+    }
+
+    var f = new FileFormatInstance(F);
+    if (f.isNull) {
+        throw new Error("Unable to instantiate file format: " + F.name);
+    }
+
+    if (!f.create(outputPath, outputHints)) {
+        throw new Error("Error creating output file: " + outputPath);
+    }
+
+    var d = new ImageDescription;
+    d.bitsPerSample = 32;
+    d.ieeefpSampleFormat = true;
+    d.imageType = integratedWindow.imageType;
+
+    if (!f.setOptions(d)) {
+        throw new Error("Unable to set output file options");
+    }
+
+    f.keywords = integratedWindow.keywords;
+    integratedWindow.mainView.exportProperties(f);
+
+    if (!f.writeImage(integratedWindow.mainView.image)) {
+        throw new Error("Error writing output file: " + outputPath);
+    }
+
+    f.close();
+    integratedWindow.forceClose();
+
     console.writeln("Saved master to: {{ group.output_path }}");
 } else {
     console.writeln("ERROR: Could not find integrated image");

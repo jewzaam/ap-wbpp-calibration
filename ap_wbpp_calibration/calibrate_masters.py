@@ -7,6 +7,7 @@ Main entry point for calibration master generation.
 import argparse
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -24,16 +25,18 @@ def generate_masters(
     bias_master_dir: Optional[str] = None,
     dark_master_dir: Optional[str] = None,
     script_output_dir: Optional[str] = None,
+    timestamp: Optional[str] = None,
 ) -> List[str]:
     """
     Generate calibration masters from input directory.
 
     Args:
         input_dir: Directory containing calibration frames
-        output_dir: Directory for output master files
+        output_dir: Base output directory
         bias_master_dir: Directory containing bias masters (for flat calibration)
         dark_master_dir: Directory containing dark masters (for flat calibration)
-        script_output_dir: Directory for generated JS scripts (default: output_dir/scripts)
+        script_output_dir: Directory for generated JS scripts (default: output_dir/logs)
+        timestamp: Timestamp string for script filename (default: current time)
 
     Returns:
         List of generated script file paths
@@ -41,10 +44,15 @@ def generate_masters(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
+    # Masters go in output_dir/master subdirectory
+    master_dir = output_path / "master"
+    master_dir.mkdir(parents=True, exist_ok=True)
+
+    # Scripts go in output_dir/logs subdirectory
     if script_output_dir:
         script_dir = Path(script_output_dir)
     else:
-        script_dir = output_path / "scripts"
+        script_dir = output_path / "logs"
     script_dir.mkdir(parents=True, exist_ok=True)
 
     # Discover files using ap-common get_filtered_metadata
@@ -155,23 +163,36 @@ def generate_masters(
     # Generate single combined script
     if bias_groups_list or dark_groups_list or flat_groups_list:
         print("\nGenerating combined script...")
+
+        # Use timestamp for script filename (will match log timestamp)
+        if not timestamp:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Define log file path (same directory, same timestamp)
+        log_file_path = script_dir / f"{timestamp}.log"
+
         combined_script = generate_combined_script(
-            str(output_path),
+            str(master_dir),
             bias_groups_list,
             dark_groups_list,
             flat_groups_list,
+            str(log_file_path),
         )
 
-        script_path = script_dir / "calibrate_masters.js"
+        script_path = script_dir / f"{timestamp}_calibrate_masters.js"
         script_path.write_text(combined_script, encoding="utf-8")
         print(f"  Generated: {script_path.name}")
+        print(f"  Console output will be logged to: {log_file_path.name}")
         return [str(script_path)]
 
     return []
 
 
 def run_pixinsight(
-    pixinsight_binary: str, script_path: str, instance_id: int = 123
+    pixinsight_binary: str,
+    script_path: str,
+    instance_id: int = 123,
+    force_exit: bool = True,
 ) -> int:
     """
     Execute PixInsight with the generated script.
@@ -180,6 +201,7 @@ def run_pixinsight(
         pixinsight_binary: Path to PixInsight binary/executable
         script_path: Path to the JavaScript script to execute
         instance_id: PixInsight instance ID (default: 123)
+        force_exit: Exit PixInsight after script completes (default: True)
 
     Returns:
         Exit code from PixInsight process
@@ -193,19 +215,49 @@ def run_pixinsight(
     if not script_path.exists():
         raise FileNotFoundError(f"Script not found: {script_path}")
 
-    print(f"\nExecuting PixInsight...")
+    # Extract log file path from script directory
+    log_file = (
+        script_path.parent / f"{script_path.stem.replace('_calibrate_masters', '')}.log"
+    )
+
+    print("\nExecuting PixInsight...")
     print(f"  Binary: {pixinsight_binary}")
     print(f"  Script: {script_path}")
+    print(f"  Console log: {log_file}")
     print(f"  Instance ID: {instance_id}")
+    print("  Automation mode: enabled")
 
-    # Build command: PixInsight -n <instance_id> <script_path>
-    cmd = [str(pixinsight_binary), "-n", str(instance_id), "--run", str(script_path)]
+    # Build command: PixInsight --automation-mode -n=<instance_id> -r=<script_path> --force-exit
+    # Note: PixInsight requires equals sign format, not space-separated arguments
+    # --automation-mode prevents interactive dialogs and GUI messages
+    cmd = [
+        str(pixinsight_binary),
+        "--automation-mode",
+        f"-n={instance_id}",
+        f"-r={script_path}",
+    ]
+
+    if force_exit:
+        cmd.append("--force-exit")
+        print("  Force exit: enabled")
 
     print(f"\nRunning: {' '.join(cmd)}\n")
 
     # Execute and wait for completion
+    # Console output is logged by PixInsight via Console.beginLog() in the script
     try:
-        result = subprocess.run(cmd, check=False)
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+            text=True,
+        )
+
+        # Print any stderr/stdout from the process itself (e.g., GPU warnings)
+        if result.stdout:
+            print(result.stdout)
+
         return result.returncode
     except Exception as e:
         print(f"ERROR: Failed to execute PixInsight: {e}", file=sys.stderr)
@@ -235,7 +287,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--script-dir",
-        help="Directory for generated PixInsight scripts (default: output_dir/scripts)",
+        help="Directory for generated PixInsight scripts and logs (default: output_dir/logs)",
     )
     parser.add_argument(
         "--pixinsight-binary",
@@ -248,6 +300,11 @@ def main() -> int:
         help="PixInsight instance ID (default: 123)",
     )
     parser.add_argument(
+        "--no-force-exit",
+        action="store_true",
+        help="Don't exit PixInsight after script completes (default: exit automatically)",
+    )
+    parser.add_argument(
         "--script-only",
         action="store_true",
         help="Generate scripts only, do not execute PixInsight",
@@ -256,31 +313,43 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        # Generate timestamp once to use for both script and log
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
         scripts = generate_masters(
             args.input_dir,
             args.output_dir,
             args.bias_master_dir,
             args.dark_master_dir,
             args.script_dir,
+            timestamp,
         )
 
         if scripts:
             print(f"\nGenerated combined script: {Path(scripts[0]).name}")
             print(f"Script location: {Path(scripts[0]).parent}")
+            print(f"Masters will be output to: {args.output_dir}")
 
             # Execute PixInsight if requested
             if not args.script_only:
                 if not args.pixinsight_binary:
-                    print("\nERROR: --pixinsight-binary is required to execute PixInsight")
+                    print(
+                        "\nERROR: --pixinsight-binary is required to execute PixInsight"
+                    )
                     print("Use --script-only to generate scripts without executing")
                     return 1
 
                 exit_code = run_pixinsight(
-                    args.pixinsight_binary, scripts[0], args.instance_id
+                    args.pixinsight_binary,
+                    scripts[0],
+                    args.instance_id,
+                    not args.no_force_exit,
                 )
 
                 if exit_code == 0:
                     print("\nPixInsight execution completed successfully!")
+                    print(f"Master files: {args.output_dir}/master")
+                    print(f"Logs: {args.output_dir}/logs")
                 else:
                     print(
                         f"\nWARNING: PixInsight exited with code {exit_code}",
@@ -290,7 +359,7 @@ def main() -> int:
             else:
                 print("\nScript-only mode: PixInsight execution skipped")
                 print(
-                    f"To execute: {args.pixinsight_binary or '<pixinsight-binary>'} -n {args.instance_id} {scripts[0]}"
+                    f"To execute: {args.pixinsight_binary or '<pixinsight-binary>'} --automation-mode -n={args.instance_id} -r={scripts[0]} --force-exit"
                 )
         else:
             print("\nNo calibration frames found to process.")

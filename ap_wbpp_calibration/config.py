@@ -25,30 +25,30 @@ KEYWORD_FILTER = "filter"  # From FILTER
 REQUIRED_KEYWORDS = {
     "bias": [
         KEYWORD_TYPE,
-        KEYWORD_CAMERA,
         KEYWORD_SETTEMP,
         KEYWORD_GAIN,
         KEYWORD_OFFSET,
+        KEYWORD_CAMERA,
         KEYWORD_READOUTMODE,
     ],
     "dark": [
         KEYWORD_TYPE,
         KEYWORD_EXPOSURESECONDS,
-        KEYWORD_CAMERA,
         KEYWORD_SETTEMP,
         KEYWORD_GAIN,
         KEYWORD_OFFSET,
+        KEYWORD_CAMERA,
         KEYWORD_READOUTMODE,
     ],
     "flat": [
         KEYWORD_TYPE,
-        KEYWORD_CAMERA,
+        KEYWORD_FILTER,
+        KEYWORD_DATE,
         KEYWORD_SETTEMP,
         KEYWORD_GAIN,
         KEYWORD_OFFSET,
+        KEYWORD_CAMERA,
         KEYWORD_READOUTMODE,
-        KEYWORD_DATE,
-        KEYWORD_FILTER,
     ],
 }
 

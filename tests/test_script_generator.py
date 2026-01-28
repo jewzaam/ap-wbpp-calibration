@@ -148,10 +148,13 @@ class TestGenerateCombinedScript:
                 ["file1.fits", "file2.fits"],
             )
         ]
-        script = generate_combined_script(output_dir, bias_groups, [], [])
+        log_file = str(tmp_path / "test.log")
+        script = generate_combined_script(output_dir, bias_groups, [], [], log_file)
         assert "Processing Bias Frames" in script
         assert "ImageIntegration" in script
         assert "file1.fits" in script or "file2.fits" in script
+        assert "Console.beginLog" in script
+        assert "Console.endLog" in script
 
     def test_generates_script_with_dark_groups(self, tmp_path):
         """Test generating script with dark groups."""
@@ -169,7 +172,8 @@ class TestGenerateCombinedScript:
                 ["dark1.fits", "dark2.fits"],
             )
         ]
-        script = generate_combined_script(output_dir, [], dark_groups, [])
+        log_file = str(tmp_path / "test.log")
+        script = generate_combined_script(output_dir, [], dark_groups, [], log_file)
         assert "Processing Dark Frames" in script
         assert "ImageIntegration" in script
 
@@ -192,7 +196,8 @@ class TestGenerateCombinedScript:
                 "dark_master.xisf",
             )
         ]
-        script = generate_combined_script(output_dir, [], [], flat_groups)
+        log_file = str(tmp_path / "test.log")
+        script = generate_combined_script(output_dir, [], [], flat_groups, log_file)
         assert "Processing Flat Frames" in script
         assert "ImageCalibration" in script
         assert "ImageIntegration" in script
@@ -218,7 +223,8 @@ class TestGenerateCombinedScript:
                 None,  # No dark master
             )
         ]
-        script = generate_combined_script(output_dir, [], [], flat_groups)
+        log_file = str(tmp_path / "test.log")
+        script = generate_combined_script(output_dir, [], [], flat_groups, log_file)
         # Should not have calibration phase
         assert "ImageCalibration" not in script
         # But should have integration

@@ -68,7 +68,7 @@ P.outputPedestalMode = ImageCalibration.prototype.OutputPedestal_Literal;
 P.autoPedestalLimit = 0.00010;
 P.generateHistoryProperties = true;
 P.generateFITSKeywords = true;
-P.overwriteExistingFiles = false;
+P.overwriteExistingFiles = true;
 P.onError = ImageCalibration.prototype.Continue;
 P.noGUIMessages = true;
 P.useFileThreads = true;
@@ -78,6 +78,17 @@ P.maxFileWriteThreads = 0;
 
 console.show();
 console.writeln("Calibrating flat frames for: {{ group.master_name }}");
+console.writeln("Number of target frames: " + P.targetFrames.length);
+for (var i = 0; i < P.targetFrames.length; i++) {
+    console.writeln("  [" + i + "] " + P.targetFrames[i][1]);
+}
+if (P.masterBiasEnabled) {
+    console.writeln("Using master bias: " + P.masterBiasPath);
+}
+if (P.masterDarkEnabled) {
+    console.writeln("Using master dark: " + P.masterDarkPath);
+}
+console.writeln("Output directory: " + P.outputDirectory);
 console.flush();
 
 P.executeGlobal();

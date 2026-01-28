@@ -31,7 +31,8 @@ class TestCreateGroupKey:
         assert isinstance(key, tuple)
         assert len(key) == len(config.REQUIRED_KEYWORDS["bias"])
         assert key[0] == "bias"  # TYPE
-        assert key[1] == "ATR585M"  # CAMERA
+        assert key[1] == "-10.00"  # SETTEMP
+        assert key[4] == "ATR585M"  # CAMERA
 
     def test_dark_group_key(self):
         """Test creating group key for dark frames."""
@@ -65,8 +66,8 @@ class TestCreateGroupKey:
         key = create_group_key(headers, "flat")
         assert isinstance(key, tuple)
         assert len(key) == len(config.REQUIRED_KEYWORDS["flat"])
-        assert key[-2] == "2026-01-15"  # DATE
-        assert key[-1] == "B"  # FILTER
+        assert key[1] == "B"  # FILTER
+        assert key[2] == "2026-01-15"  # DATE
 
     def test_missing_values_become_empty_string(self):
         """Test that missing header values become empty strings."""

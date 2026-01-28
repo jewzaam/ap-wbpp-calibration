@@ -89,6 +89,7 @@ def generate_combined_script(
     bias_groups: List[Tuple[Dict[str, str], List[str]]],
     dark_groups: List[Tuple[Dict[str, str], List[str]]],
     flat_groups: List[Tuple[Dict[str, str], List[str], Optional[str], Optional[str]]],
+    log_file: str,
 ) -> str:
     """
     Generate a single combined script that processes all groups sequentially.
@@ -98,6 +99,7 @@ def generate_combined_script(
         bias_groups: List of (metadata, file_paths) tuples for bias groups
         dark_groups: List of (metadata, file_paths) tuples for dark groups
         flat_groups: List of (metadata, file_paths, master_bias_xisf, master_dark_xisf) tuples for flat groups
+        log_file: Path to log file for Console.beginLog()
 
     Returns:
         Combined JavaScript code as string
@@ -161,4 +163,5 @@ def generate_combined_script(
         bias_groups=bias_contexts,
         dark_groups=dark_contexts,
         flat_groups=flat_contexts,
+        log_file=escape_js_string(log_file),
     )
