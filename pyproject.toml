@@ -7,8 +7,8 @@ name = "ap-master-calibration"
 version = "0.1.0"
 description = "Automated master calibration frame generation for PixInsight"
 readme = "README.md"
-requires-python = ">=3.8"
-license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
 authors = [
     {name = "Naveen Malik"}
 ]
@@ -18,8 +18,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -39,10 +37,11 @@ ap-master-calibration = "ap_master_calibration.calibrate_masters:main"
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "pytest-cov",
-    "black",
-    "flake8",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "mypy",
 ]
 
 [tool.setuptools]
@@ -72,3 +71,11 @@ target-version = ["py310", "py311", "py312", "py313", "py314"]
 [tool.flake8]
 max-line-length = 88
 extend-ignore = ["E203", "E266", "E501", "W503", "F401", "W605", "E722"]
+
+[tool.mypy]
+ignore_missing_imports = true
+disallow_untyped_defs = false
+check_untyped_defs = false
+warn_return_any = false
+warn_unused_ignores = false
+no_implicit_optional = false

@@ -18,19 +18,16 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.14'
-    
+        python-version: '3.12'
+
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # ap-common will be installed automatically via pyproject.toml dependencies
-        python -m pip install -e ".[dev]"
-    
+      run: make install-dev
+
     - name: Generate coverage report
       run: |
-        python -m pytest --cov=ap_master_calibration --cov-report=term --cov-report=xml || true
+        make coverage
         python -m coverage report | tail -1 | awk '{print $$4}' | sed 's/%//' > .coverage-percentage || echo "0" > .coverage-percentage
     
     - name: Extract coverage data and set badge info

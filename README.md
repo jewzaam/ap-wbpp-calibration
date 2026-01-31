@@ -19,16 +19,16 @@ This tool is part of the astrophotography pipeline. For comprehensive documentat
 
 ## Installation
 
+### Development
+
 ```bash
-pip install git+https://github.com/jewzaam/ap-master-calibration.git
+make install-dev
 ```
 
-Or install in development mode:
+### From Git
 
 ```bash
-git clone https://github.com/jewzaam/ap-master-calibration.git
-cd ap-master-calibration
-pip install -e .
+pip install git+https://github.com/jewzaam/ap-master-calibration.git
 ```
 
 ## Quick Start
@@ -186,7 +186,3 @@ Format code:
 black ap_master_calibration/ tests/
 ruff check ap_master_calibration/ tests/
 ```
-
-## License
-
-See LICENSE file for details.
