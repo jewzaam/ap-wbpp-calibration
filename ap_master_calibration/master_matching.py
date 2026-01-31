@@ -6,9 +6,16 @@ Find matching bias/dark masters for flat calibration.
 
 import ap_common
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 from . import config
+
+
+class DarkCandidate(TypedDict):
+    """Type definition for dark candidate dictionary."""
+
+    path: str
+    exposure: float
 
 
 def find_matching_master_for_flat(
@@ -112,18 +119,18 @@ def _find_best_dark_match(
         target_exposure = min(flat_exposure_times)
     else:
         # Use exposure from headers
-        target_exposure = flat_headers.get(config.KEYWORD_EXPOSURESECONDS)
-        if target_exposure is None:
+        target_exposure_raw: Any = flat_headers.get(config.KEYWORD_EXPOSURESECONDS)
+        if target_exposure_raw is None:
             # No exposure time available, return first match
             return next(iter(matching_masters.keys()))
         try:
-            target_exposure = float(target_exposure)
+            target_exposure = float(target_exposure_raw)
         except (ValueError, TypeError):
             # Can't parse exposure time, return first match
             return next(iter(matching_masters.keys()))
 
     # Extract exposure times from masters
-    dark_candidates = []
+    dark_candidates: list[DarkCandidate] = []
     for filename, metadata in matching_masters.items():
         exposure = metadata.get(config.KEYWORD_EXPOSURESECONDS)
         if exposure is None:
@@ -131,10 +138,7 @@ def _find_best_dark_match(
         try:
             exposure_float = float(exposure)
             dark_candidates.append(
-                {
-                    "path": filename,
-                    "exposure": exposure_float,
-                }
+                DarkCandidate(path=filename, exposure=exposure_float)
             )
         except (ValueError, TypeError):
             continue

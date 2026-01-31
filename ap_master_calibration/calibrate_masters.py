@@ -223,23 +223,23 @@ def run_pixinsight(
     Returns:
         Exit code from PixInsight process
     """
-    script_path = Path(script_path).resolve()
-    pixinsight_binary = Path(pixinsight_binary).resolve()
+    script_path_obj = Path(script_path).resolve()
+    pixinsight_binary_obj = Path(pixinsight_binary).resolve()
 
-    if not pixinsight_binary.exists():
-        raise FileNotFoundError(f"PixInsight binary not found: {pixinsight_binary}")
+    if not pixinsight_binary_obj.exists():
+        raise FileNotFoundError(f"PixInsight binary not found: {pixinsight_binary_obj}")
 
-    if not script_path.exists():
-        raise FileNotFoundError(f"Script not found: {script_path}")
+    if not script_path_obj.exists():
+        raise FileNotFoundError(f"Script not found: {script_path_obj}")
 
     # Extract log file path from script directory
     log_file = (
-        script_path.parent / f"{script_path.stem.replace('_calibrate_masters', '')}.log"
+        script_path_obj.parent / f"{script_path_obj.stem.replace('_calibrate_masters', '')}.log"
     )
 
     print("\nExecuting PixInsight...")
-    print(f"  Binary: {pixinsight_binary}")
-    print(f"  Script: {script_path}")
+    print(f"  Binary: {pixinsight_binary_obj}")
+    print(f"  Script: {script_path_obj}")
     print(f"  Console log: {log_file}")
     print(f"  Instance ID: {instance_id}")
     print("  Automation mode: enabled")
@@ -248,10 +248,10 @@ def run_pixinsight(
     # Note: PixInsight requires equals sign format, not space-separated arguments
     # --automation-mode prevents interactive dialogs and GUI messages
     cmd = [
-        str(pixinsight_binary),
+        str(pixinsight_binary_obj),
         "--automation-mode",
         f"-n={instance_id}",
-        f"-r={script_path}",
+        f"-r={script_path_obj}",
     ]
 
     if force_exit:

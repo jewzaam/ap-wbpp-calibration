@@ -52,7 +52,7 @@ def group_files(files: List[Dict], frame_type: str) -> Dict[Tuple, List[Dict]]:
     Returns:
         Dictionary mapping group keys (tuples) to lists of file info dicts
     """
-    groups: Dict[str, List[Dict]] = {}
+    groups: Dict[Tuple, List[Dict]] = {}
 
     for file_info in files:
         headers = file_info["headers"]
